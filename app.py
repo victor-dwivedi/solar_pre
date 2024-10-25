@@ -34,10 +34,16 @@ def fetch_weather_data(api_key, location, days=30):
                 # Calculate daylight duration in hours
                 daylight_duration = (sunset_dt - sunrise_dt).seconds / 3600
 
+                # Retrieve cloud cover data, default to 50% if unavailable
+                cloud_cover = data['forecast']['forecastday'][0]['day'].get('cloud', None)
+                if cloud_cover is None:
+                    st.warning(f"Cloud cover data not available for {date}. Using default value of 50%.")
+                    cloud_cover = 50  # Arbitrary default if cloud data is missing
+
                 daily_data = {
                     "date": date,
                     "sunlight_hours": daylight_duration,
-                    "cloud_cover": data['forecast']['forecastday'][0]['day'].get('cloud', 0),
+                    "cloud_cover": cloud_cover,
                     "temperature": data['forecast']['forecastday'][0]['day'].get('avgtemp_c', 0),
                     "solar_energy_production": None
                 }
@@ -66,67 +72,55 @@ def create_solar_energy_production(df):
 
 # Function to predict solar energy production for a new day
 def predict_solar_energy(model, sunlight_hours, cloud_cover, temperature):
-    input_data = pd.DataFrame([[sunlight_hours, cloud_cover, temperature]], columns=['sunlight_hours', 'cloud_cover', 'temperature'])
+    input_data = pd.DataFrame([[sunlight_hours, cloud_cover, temperature]], 
+                              columns=['sunlight_hours', 'cloud_cover', 'temperature'])
     predicted_production = model.predict(input_data)
     return predicted_production[0]
 
-# Suggestions for appliances based on solar energy production, calculating usage duration
+# Suggestions for appliances based on solar energy production
 def suggest_appliances(predicted_energy):
     appliances = {
-        "LED Bulbs": 10,    # watts
+        "LED Bulbs": 2,     # watts
         "Laptop": 50,       # watts
-        "Fan": 75,          # watts
-        "Television": 100,  # watts
+        "Television": 100,   # watts
         "Refrigerator": 200, # watts
         "Washing Machine": 500, # watts
         "Air Conditioner": 2000, # watts
+        "Electric Kettle": 1500, # watts
+        "Microwave Oven": 1000,  # watts
+        "Fan": 70,         # watts
+        "Desktop Computer": 200  # watts
     }
     
-    suggestions = []
+    suggestions = {}
     for appliance, wattage in appliances.items():
-        # Convert wattage to kWh per hour and calculate hours of usage
-        wattage_kwh = wattage / 1000  # converting watts to kW for kWh calculation
-        usage_hours = predicted_energy / wattage_kwh
-        if usage_hours > 0:
-            suggestions.append((appliance, wattage, usage_hours))
+        if predicted_energy >= wattage:
+            hours = predicted_energy / wattage  # Calculate usage hours
+            suggestions[appliance] = hours
     
     return suggestions
 
-# Function to display Time of Use (ToU) tariff plot
-def plot_tariff():
-    hours = np.arange(24)
-    tariff = [1 if (6 <= h < 18) else 2 for h in hours]  # Lower tariff in daylight, higher at night
-
-    plt.figure(figsize=(10, 4))
-    plt.plot(hours, tariff, label="ToU Tariff (1 = Low, 2 = High)", color='orange', marker='o')
-    plt.xticks(hours)
-    plt.xlabel("Hour of Day")
-    plt.ylabel("Tariff Rate")
-    plt.title("Time of Use (ToU) Tariff Throughout the Day")
-    plt.legend()
-    st.pyplot(plt)
-
 # Main function
 def main():
-    # Set up background image and Bootstrap
-    st.markdown("""
-    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    # Set up background image
+    st.markdown(
+    """
     <style>
     .reportview-container {
-        background: url('https://t3.ftcdn.net/jpg/06/58/93/12/360_F_658931267_W9QK8mbF8NvK8MrXrkek4MYE8Lr1RixM.jpg');
+        background-image: url('https://t3.ftcdn.net/jpg/06/58/93/12/360_F_658931267_W9QK8mbF8NvK8MrXrkek4MYE8Lr1RixM.jpg');
         background-size: cover;
         background-repeat: no-repeat;
         background-attachment: fixed;
         background-position: center;
     }
-    .content {
-        background: rgba(255, 255, 255, 0.8); padding: 20px; border-radius: 8px;
-    }
     </style>
-    """, unsafe_allow_html=True)
+    """,
+    unsafe_allow_html=True
+)
 
     st.title("Solar Energy Production Predictor")
-    location = st.text_input("Enter your location", placeholder="e.g., Nagpur")
+    
+    location = st.text_input("Enter your location", "Nagpur")
 
     if location:
         weather_df = fetch_weather_data(API_KEY, location)
@@ -147,15 +141,22 @@ def main():
             # Make predictions for the entire dataset
             weather_df['predicted_energy'] = model.predict(X)
 
-            # Display today's weather
-            today_data = weather_df.iloc[0]
-            st.write(f"**Today's Weather Conditions**")
-            st.write(f"Sunlight Hours: {today_data['sunlight_hours']:.2f} hours")
-            st.write(f"Cloud Cover: {today_data['cloud_cover']}%")
-            st.write(f"Temperature: {today_data['temperature']}°C")
+            # Display today's date
+            today_date = datetime.now().strftime("%Y-%m-%d")
+            st.write(f"Today's date: {today_date}")
 
-            # Example prediction inputs
-            new_sunlight_hours = st.number_input("Sunlight hours", value=8)
+            # Plotting predicted energy production
+            plt.figure(figsize=(10, 5))
+            plt.plot(weather_df['date'], weather_df['predicted_energy'], marker='o', label='Predicted Solar Energy Production (kWh)')
+            plt.xticks(rotation=45)
+            plt.xlabel("Date")
+            plt.ylabel("Solar Energy Production (kWh)")
+            plt.title("Predicted Solar Energy Production Over Last 30 Days")
+            plt.legend()
+            st.pyplot(plt)
+
+            # Input for new day prediction
+            new_sunlight_hours = st.number_input("Sunlight hours", value=10)
             new_cloud_cover = st.number_input("Cloud cover (%)", value=20)
             new_temperature = st.number_input("Temperature (°C)", value=25)
 
@@ -166,18 +167,15 @@ def main():
                 # Provide suggestions for appliances
                 suggestions = suggest_appliances(predicted_energy)
                 if suggestions:
-                    st.write("### Appliance Usage Based on Predicted Solar Energy")
-                    st.write("| Appliance          | Power (Watts) | Usable Hours |")
-                    st.write("|--------------------|---------------|--------------|")
-                    for appliance, wattage, hours in suggestions:
-                        st.write(f"| {appliance}        | {wattage} W   | {hours:.2f} hrs    |")
+                    st.write("You can power the following appliances with the predicted solar energy:")
+                    st.write("Appliance - Hours of usage:")
+                    usage_table = pd.DataFrame(suggestions.items(), columns=['Appliance', 'Hours of Usage'])
+                    st.table(usage_table)
                 else:
                     st.write("Not enough energy to power any appliances.")
+        else:
+            st.warning("No data available for the specified location and date range.")
 
-            # Plot ToU Tariff
-            st.write("### Time of Use (ToU) Tariff")
-            plot_tariff()
-            st.write("**Tip:** Use high-power appliances like air conditioners and washing machines during low-tariff hours (daytime) to save on bills.")
-
+# Run the app
 if __name__ == "__main__":
     main()
