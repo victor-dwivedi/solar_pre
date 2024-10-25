@@ -111,7 +111,7 @@ def main():
     st.title("Solar Energy Production Predictor")
     
     location = st.text_input("Enter your location", "Nagpur")
-    api_key = st.text_input("Enter your API Key", "your_api_key_here")
+    api_key = st.text_input("Enter your API Key", "6905b6c823214623958124021242510")
 
     if location and api_key:
         weather_df = fetch_weather_data(api_key, location)
@@ -138,6 +138,7 @@ def main():
             st.write(f"Today's date: {today_date}")
 
             # Plotting predicted energy production
+            st.subheader("Predicted Solar Energy Production Over Time")
             plt.figure(figsize=(10, 5))
             plt.plot(weather_df['date'], weather_df['predicted_energy'], marker='o', label='Predicted Solar Energy Production (kWh)')
             plt.xticks(rotation=45)
@@ -147,16 +148,55 @@ def main():
             plt.legend()
             st.pyplot(plt)
 
-            # Example prediction inputs
-            new_sunlight_hours = st.number_input("Sunlight hours", value=10)
-            new_temperature = st.number_input("Temperature (°C)", value=25)
+            # Plotting sunlight hours
+            st.subheader("Daily Sunlight Hours")
+            plt.figure(figsize=(10, 5))
+            plt.bar(weather_df['date'], weather_df['sunlight_hours'], color='orange')
+            plt.xticks(rotation=45)
+            plt.xlabel("Date")
+            plt.ylabel("Sunlight Hours")
+            plt.title("Daily Sunlight Hours Over Last 30 Days")
+            st.pyplot(plt)
 
-            if st.button("Predict"):
-                predicted_energy = predict_solar_energy(model, new_sunlight_hours, new_temperature)
-                st.write(f'Predicted Solar Energy Production: {predicted_energy:.2f} kWh')
+            # Plotting daily average temperature
+            st.subheader("Daily Average Temperature")
+            plt.figure(figsize=(10, 5))
+            plt.plot(weather_df['date'], weather_df['temperature'], marker='s', color='blue', label='Average Temperature (°C)')
+            plt.xticks(rotation=45)
+            plt.xlabel("Date")
+            plt.ylabel("Temperature (°C)")
+            plt.title("Daily Average Temperature Over Last 30 Days")
+            plt.legend()
+            st.pyplot(plt)
 
-                # Provide suggestions for appliances
+            # Plotting predicted vs actual solar energy production
+            st.subheader("Predicted vs Actual Solar Energy Production")
+            plt.figure(figsize=(10, 5))
+            plt.plot(weather_df['date'], weather_df['predicted_energy'], marker='o', color='green', label='Predicted Energy')
+            plt.axhline(y=0, color='r', linestyle='--', label='Actual Energy (if available)')
+            plt.xticks(rotation=45)
+            plt.xlabel("Date")
+            plt.ylabel("Energy (kWh)")
+            plt.title("Predicted vs Actual Solar Energy Production")
+            plt.legend()
+            st.pyplot(plt)
+
+            # Appliance usage capacity plot
+            st.subheader("Appliance Usage Capacity Based on Predicted Solar Energy")
+            if st.button("Calculate Appliance Usage"):
+                predicted_energy = weather_df['predicted_energy'].iloc[-1]  # Get the latest predicted energy
                 suggestions, usage_hours = suggest_appliances(predicted_energy)
+
+                usage_df = pd.DataFrame(usage_hours.items(), columns=['Appliance', 'Usage Hours'])
+
+                plt.figure(figsize=(10, 5))
+                plt.bar(usage_df['Appliance'], usage_df['Usage Hours'], color='purple')
+                plt.xlabel("Appliance")
+                plt.ylabel("Hours of Usage")
+                plt.title("Appliance Usage Capacity Based on Predicted Solar Energy")
+                plt.xticks(rotation=45)
+                st.pyplot(plt)
+
                 if suggestions:
                     st.write("You can power the following appliances with the predicted solar energy:")
                     for appliance in suggestions:
