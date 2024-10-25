@@ -14,11 +14,9 @@ API_KEY = "d224a9f66ffa425eab3180904242310"
 
 # Function to fetch weather data from the Weather API
 def fetch_weather_data(api_key, location, days=30):
-    # Base URL for the weather API
     url = f"http://api.weatherapi.com/v1/history.json?key={api_key}&q={location}&dt="
     weather_data = []
 
-    # Get the last 'days' days of weather data
     for i in range(days):
         date = (datetime.now() - timedelta(days=i)).strftime("%Y-%m-%d")
         response = requests.get(url + date)
@@ -26,7 +24,6 @@ def fetch_weather_data(api_key, location, days=30):
         if response.status_code == 200:
             data = response.json()
             try:
-                # Extract relevant information
                 daily_data = {
                     "date": date,
                     "sunlight_hours": data['forecast']['forecastday'][0]['day'].get('sunshine', 0),
@@ -66,8 +63,8 @@ def predict_solar_energy(model, sunlight_hours, cloud_cover, temperature):
 # Suggestions for appliances based on solar energy production
 def suggest_appliances(predicted_energy):
     appliances = {
-        "LED Bulbs": 10,    # watts
-        "Laptop": 50,       # watts
+        "LED Bulbs": 2,    # watts
+        "Laptop": 5,       # watts
         "Television": 100,  # watts
         "Refrigerator": 200, # watts
         "Washing Machine": 500, # watts
@@ -83,8 +80,23 @@ def suggest_appliances(predicted_energy):
 
 # Main function
 def main():
-    st.title("Solar Energy Production Predictor")
+    # Set up background image
+    st.markdown(
+        """
+        <style>
+        .reportview-container {
+            background: url('https://your-image-url.com/path-to-your-image.jpg');
+            background-size: cover;
+            background-repeat: no-repeat;
+            background-attachment: fixed;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
 
+    st.title("Solar Energy Production Predictor")
+    
     location = st.text_input("Enter your location", "Nagpur")
 
     if location:
