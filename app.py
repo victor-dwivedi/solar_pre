@@ -10,7 +10,7 @@ from sklearn.ensemble import RandomForestRegressor
 import streamlit as st
 
 # Hardcoded API key
-API_KEY = "your_api_key_here"
+API_KEY = "d224a9f66ffa425eab3180904242310"
 
 # Function to fetch weather data from the Weather API
 def fetch_weather_data(api_key, location, days=30):
