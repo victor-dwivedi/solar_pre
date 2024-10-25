@@ -85,7 +85,7 @@ def main():
         """
         <style>
         .reportview-container {
-            background: url('https://your-image-url.com/path-to-your-image.jpg');
+            background: url('https://t3.ftcdn.net/jpg/06/58/93/12/360_F_658931267_W9QK8mbF8NvK8MrXrkek4MYE8Lr1RixM.jpg');
             background-size: cover;
             background-repeat: no-repeat;
             background-attachment: fixed;
