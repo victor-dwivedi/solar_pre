@@ -3,11 +3,14 @@
 import requests
 import pandas as pd
 import numpy as np
+import matplotlib.pyplot as plt
 from datetime import datetime, timedelta
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestRegressor
-from sklearn.metrics import mean_squared_error, r2_score
 import streamlit as st
+
+# Hardcoded API key
+API_KEY = "d224a9f66ffa425eab3180904242310"
 
 # Function to fetch weather data from the Weather API
 def fetch_weather_data(api_key, location, days=30):
@@ -54,15 +57,38 @@ def create_solar_energy_production(df):
 
     return df
 
+# Function to predict solar energy production for a new day
+def predict_solar_energy(model, sunlight_hours, cloud_cover, temperature):
+    input_data = pd.DataFrame([[sunlight_hours, cloud_cover, temperature]], columns=['sunlight_hours', 'cloud_cover', 'temperature'])
+    predicted_production = model.predict(input_data)
+    return predicted_production[0]
+
+# Suggestions for appliances based on solar energy production
+def suggest_appliances(predicted_energy):
+    appliances = {
+        "LED Bulbs": 10,    # watts
+        "Laptop": 50,       # watts
+        "Television": 100,  # watts
+        "Refrigerator": 200, # watts
+        "Washing Machine": 500, # watts
+        "Air Conditioner": 2000, # watts
+    }
+    
+    suggestions = []
+    for appliance, wattage in appliances.items():
+        if predicted_energy >= wattage:
+            suggestions.append(appliance)
+    
+    return suggestions
+
 # Main function
 def main():
     st.title("Solar Energy Production Predictor")
 
-    api_key = st.text_input("Enter your Weather API key", "")
     location = st.text_input("Enter your location", "Nagpur")
 
-    if api_key and location:
-        weather_df = fetch_weather_data(api_key, location)
+    if location:
+        weather_df = fetch_weather_data(API_KEY, location)
         if weather_df is not None and not weather_df.empty:
             weather_df = create_solar_energy_production(weather_df)
 
@@ -77,21 +103,22 @@ def main():
             model = RandomForestRegressor(n_estimators=100, random_state=42)
             model.fit(X_train, y_train)
 
-            # Make predictions
-            y_pred = model.predict(X_test)
+            # Make predictions for the entire dataset
+            weather_df['predicted_energy'] = model.predict(X)
 
-            # Evaluate the model
-            mse = mean_squared_error(y_test, y_pred)
-            r2 = r2_score(y_test, y_pred)
+            # Display today's date
+            today_date = datetime.now().strftime("%Y-%m-%d")
+            st.write(f"Today's date: {today_date}")
 
-            st.write(f'Mean Squared Error: {mse:.2f}')
-            st.write(f'R^2 Score: {r2:.2f}')
-
-            # Function to predict solar energy production for a new day
-            def predict_solar_energy(model, sunlight_hours, cloud_cover, temperature):
-                input_data = pd.DataFrame([[sunlight_hours, cloud_cover, temperature]], columns=['sunlight_hours', 'cloud_cover', 'temperature'])
-                predicted_production = model.predict(input_data)
-                return predicted_production[0]
+            # Plotting predicted energy production
+            plt.figure(figsize=(10, 5))
+            plt.plot(weather_df['date'], weather_df['predicted_energy'], marker='o', label='Predicted Solar Energy Production (kWh)')
+            plt.xticks(rotation=45)
+            plt.xlabel("Date")
+            plt.ylabel("Solar Energy Production (kWh)")
+            plt.title("Predicted Solar Energy Production Over Last 30 Days")
+            plt.legend()
+            st.pyplot(plt)
 
             # Example prediction inputs
             new_sunlight_hours = st.number_input("Sunlight hours", value=10)
@@ -101,6 +128,15 @@ def main():
             if st.button("Predict"):
                 predicted_energy = predict_solar_energy(model, new_sunlight_hours, new_cloud_cover, new_temperature)
                 st.write(f'Predicted Solar Energy Production: {predicted_energy:.2f} kWh')
+
+                # Provide suggestions for appliances
+                suggestions = suggest_appliances(predicted_energy)
+                if suggestions:
+                    st.write("You can power the following appliances with the predicted solar energy:")
+                    for appliance in suggestions:
+                        st.write(f"- {appliance}")
+                else:
+                    st.write("Not enough energy to power any appliances.")
         else:
             st.warning("No data available for the specified location and date range.")
 
