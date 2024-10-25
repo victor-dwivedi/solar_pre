@@ -19,11 +19,13 @@ def fetch_weather_data(api_key, location, days=30):
 
         if response.status_code == 200:
             data = response.json()
+            
+            # Using default values if data is missing
             daily_data = {
                 "date": date,
-                "sunlight_hours": data['forecast']['forecastday'][0]['day'].get('sunshine', 0),
-                "cloud_cover": data['forecast']['forecastday'][0]['day'].get('cloud', 0),
-                "temperature": data['forecast']['forecastday'][0]['day'].get('avgtemp_c', 0),
+                "sunlight_hours": data['forecast']['forecastday'][0]['day'].get('sunshine', 8),  # Default to 8 hours if missing
+                "cloud_cover": data['forecast']['forecastday'][0]['day'].get('cloud', 50),      # Default to 50% if missing
+                "temperature": data['forecast']['forecastday'][0]['day'].get('avgtemp_c', 25),  # Default to 25°C if missing
                 "solar_energy_production": None  # Placeholder for actual production data
             }
             weather_data.append(daily_data)
@@ -84,12 +86,25 @@ def predict_solar_energy(model, sunlight_hours, cloud_cover, temperature):
     predicted_production = model.predict(input_data)
     return predicted_production[0]
 
+# Function to estimate appliance usage based on solar energy production
+def estimate_appliance_usage(solar_energy):
+    appliances = {
+        "LED Light (10W)": solar_energy / 0.01,
+        "Fan (50W)": solar_energy / 0.05,
+        "Washing Machine (500W)": solar_energy / 0.5,
+        "Refrigerator (150W)": solar_energy / 0.15,
+        "Air Conditioner (1500W)": solar_energy / 1.5
+    }
+    
+    st.write("### Estimated Appliance Usage (in hours)")
+    for appliance, hours in appliances.items():
+        st.write(f"{appliance}: {hours:.2f} hours")
+
 # Main function to run the Streamlit app
 def main():
     st.title("Solar Energy Prediction App")
 
     API_KEY = "15126be931c44b49917131244242510"  # Replace with your actual Weather API key
-    
     LOCATION = st.text_input("Enter Location:", value="Nagpur")
     
     if st.button("Fetch Weather Data"):
@@ -126,7 +141,7 @@ def main():
             st.write(f'Mean Squared Error: {mse:.2f}')
             st.write(f'R^2 Score: {r2:.2f}')
 
-            # Example prediction for a new day
+            # Input for new prediction
             new_sunlight_hours = st.number_input("Enter Sunlight Hours for Prediction:", value=10)
             new_cloud_cover = st.number_input("Enter Cloud Cover Percentage for Prediction:", value=20)
             new_temperature = st.number_input("Enter Temperature (°C) for Prediction:", value=25)
@@ -134,6 +149,9 @@ def main():
             if st.button("Predict Solar Energy Production"):
                 predicted_energy = predict_solar_energy(model, new_sunlight_hours, new_cloud_cover, new_temperature)
                 st.write(f'Predicted Solar Energy Production: {predicted_energy:.2f} kWh')
+
+                # Estimate appliance usage based on the predicted energy
+                estimate_appliance_usage(predicted_energy)
 
 if __name__ == "__main__":
     main()
