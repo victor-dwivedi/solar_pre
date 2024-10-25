@@ -99,16 +99,9 @@ def plot_data(df):
     plt.tight_layout()
     st.pyplot(fig)
 
-# Function to predict solar energy production for a new day
-def predict_solar_energy(model, sunlight_hours, cloud_cover, temperature):
-    input_data = pd.DataFrame([[sunlight_hours, cloud_cover, temperature]], columns=['sunlight_hours', 'cloud_cover', 'temperature'])
-    predicted_production = model.predict(input_data)
-    return predicted_production[0]
-
 # Main function to run the Streamlit app
 def main():
-    st.title("Solar Energy Prediction App", anchor=None)
-    st.markdown('<h1 class="main-title">Solar Energy Prediction App</h1>', unsafe_allow_html=True)
+    st.markdown('<h1 class="main-title">Solar Energy Prediction</h1>', unsafe_allow_html=True)
 
     API_KEY = "15126be931c44b49917131244242510"  # Replace with your actual Weather API key
     
@@ -147,15 +140,6 @@ def main():
 
             st.write(f'Mean Squared Error: {mse:.2f}')
             st.write(f'R^2 Score: {r2:.2f}')
-
-            # Example prediction for a new day
-            new_sunlight_hours = st.number_input("Enter Sunlight Hours for Prediction:", min_value=8, max_value=11, value=10)
-            new_cloud_cover = st.number_input("Enter Cloud Cover Percentage for Prediction:", min_value=30, max_value=80, value=50)
-            new_temperature = st.number_input("Enter Temperature (°C) for Prediction:", value=25)
-
-            if st.button("Predict Solar Energy Production"):
-                predicted_energy = predict_solar_energy(model, new_sunlight_hours, new_cloud_cover, new_temperature)
-                st.write(f'Predicted Solar Energy Production: {predicted_energy:.2f} kWh')
 
 if __name__ == "__main__":
     main()
