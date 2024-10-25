@@ -8,18 +8,16 @@ from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestRegressor
 import streamlit as st
 
-# Hardcoded API key
+# API key
 API_KEY = "d224a9f66ffa425eab3180904242310"
 
-# Function to fetch weather data from the Weather API
+# Fetch weather data
 def fetch_weather_data(api_key, location, days=30):
     url = f"http://api.weatherapi.com/v1/history.json?key={api_key}&q={location}&dt="
     weather_data = []
-
     for i in range(days):
         date = (datetime.now() - timedelta(days=i)).strftime("%Y-%m-%d")
         response = requests.get(url + date)
-
         if response.status_code == 200:
             data = response.json()
             try:
@@ -27,152 +25,116 @@ def fetch_weather_data(api_key, location, days=30):
                     "date": date,
                     "sunlight_hours": data['forecast']['forecastday'][0]['day'].get('sunshine', 0),
                     "cloud_cover": data['forecast']['forecastday'][0]['day'].get('cloud', 0),
-                    "temperature": data['forecast']['forecastday'][0]['day'].get('avgtemp_c', 0),
-                    "solar_energy_production": None
+                    "temperature": data['forecast']['forecastday'][0]['day'].get('avgtemp_c', 0)
                 }
                 weather_data.append(daily_data)
-            except KeyError as e:
-                st.error(f"Key error: {e} on date: {date}")
-                st.write("Response data:", data)
+            except KeyError:
+                st.error(f"Data not available for {date}")
         else:
-            st.error(f"Error fetching data for {date}: {response.status_code}")
-
+            st.error(f"Error: {response.status_code}")
     return pd.DataFrame(weather_data)
 
-# Function to create synthetic solar energy production data
+# Synthetic solar energy production
 def create_solar_energy_production(df):
     sunlight_factor = 1.5
     temperature_factor = 0.1
     cloud_cover_penalty = -0.5
-
     df['solar_energy_production'] = (
         df['sunlight_hours'] * sunlight_factor +
         df['temperature'] * temperature_factor +
         df['cloud_cover'] * cloud_cover_penalty
     ).clip(lower=0)
-
     return df
 
-# Generate synthetic TOU tariff rates
-def create_tou_tariff():
-    tou_periods = ["Morning (6am-9am)", "Daytime (9am-4pm)", "Evening (4pm-9pm)", "Night (9pm-6am)"]
-    tou_rates = [0.15, 0.25, 0.30, 0.10]  # Sample rates per kWh
-    tou_df = pd.DataFrame({"Period": tou_periods, "Tariff Rate": tou_rates})
-    return tou_df
+# Time-of-Use (TOU) Tariff Data
+def generate_tou_tariff():
+    tou_hours = {
+        "High Tariff": [8, 9, 10, 11, 12, 17, 18, 19],
+        "Medium Tariff": [13, 14, 15, 16],
+        "Low Tariff": [0, 1, 2, 3, 4, 5, 6, 7, 20, 21, 22, 23]
+    }
+    return tou_hours
 
-# Function to predict solar energy production for a new day
-def predict_solar_energy(model, sunlight_hours, cloud_cover, temperature):
-    input_data = pd.DataFrame([[sunlight_hours, cloud_cover, temperature]], columns=['sunlight_hours', 'cloud_cover', 'temperature'])
-    predicted_production = model.predict(input_data)
-    return predicted_production[0]
-
-# Suggestions for appliances based on solar energy production
+# Appliance suggestions based on energy prediction
 def suggest_appliances(predicted_energy):
     appliances = {
-        "LED Bulbs": 2,    # watts
-        "Laptop": 5,       # watts
-        "Television": 100,  # watts
-        "Refrigerator": 200, # watts
-        "Washing Machine": 500, # watts
-        "Air Conditioner": 2000, # watts
+        "LED Bulbs": 10,
+        "Laptop": 50,
+        "Fan": 75,
+        "Television": 150,
+        "Refrigerator": 200,
+        "Washing Machine": 500,
+        "Air Conditioner": 2000
     }
-    
-    suggestions = []
-    for appliance, wattage in appliances.items():
-        if predicted_energy >= wattage:
-            suggestions.append(appliance)
-    
+    suggestions = [appliance for appliance, wattage in appliances.items() if predicted_energy >= wattage]
     return suggestions
 
 # Main function
 def main():
-    # Set up background image and custom CSS
-    st.markdown(
-        """
-        <style>
-        .reportview-container {
-            background-image: url('https://t3.ftcdn.net/jpg/06/58/93/12/360_F_658931267_W9QK8mbF8NvK8MrXrkek4MYE8Lr1RixM.jpg');
-            background-size: cover;
-            background-repeat: no-repeat;
-            background-attachment: fixed;
-            background-position: center;
-        }
-        .main {
-            background: rgba(255, 255, 255, 0.8);
-            padding: 2rem;
-            border-radius: 10px;
-        }
-        </style>
-        """,
-        unsafe_allow_html=True
-    )
+    # Background image and CSS styling
+    st.markdown("""
+    <style>
+    .reportview-container {
+        background: url('https://images.unsplash.com/photo-1508514177221-188b1cf16e9d?fm=jpg&q=60&w=3000&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxzZWFyY2h8NHx8c29sYXIlMjBlbmVyZ3l8ZW58MHx8MHx8fDA%3D');
+        background-size: cover;
+    }
+    .main {
+        background-color: rgba(255, 255, 255, 0.8);
+        padding: 20px;
+        border-radius: 10px;
+    }
+    </style>
+    """, unsafe_allow_html=True)
 
-    st.title("🌞 Solar Energy Production & TOU Tariff Optimizer")
+    st.title("Solar Energy Production Predictor")
+    st.write("Enter your location to fetch historical weather data:")
+
+    location = st.text_input("Location", "")
     
-    location = st.text_input("Enter your location", "Nagpur")
-
     if location:
         weather_df = fetch_weather_data(API_KEY, location)
-        if weather_df is not None and not weather_df.empty:
+        if not weather_df.empty:
             weather_df = create_solar_energy_production(weather_df)
 
-            # Prepare data for training
+            # Train Random Forest model
             X = weather_df[['sunlight_hours', 'cloud_cover', 'temperature']]
             y = weather_df['solar_energy_production']
-
-            # Split the data
             X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-
-            # Train a Random Forest Regressor
             model = RandomForestRegressor(n_estimators=100, random_state=42)
             model.fit(X_train, y_train)
 
-            # Make predictions for the entire dataset
-            weather_df['predicted_energy'] = model.predict(X)
+            # Generate today's solar energy production
+            today_sunlight = weather_df.iloc[0]['sunlight_hours']
+            today_cloud_cover = weather_df.iloc[0]['cloud_cover']
+            today_temp = weather_df.iloc[0]['temperature']
+            predicted_energy = model.predict([[today_sunlight, today_cloud_cover, today_temp]])[0]
+            st.write(f"Predicted Solar Energy Production Today: {predicted_energy:.2f} kWh")
 
-            # Display today's date
-            today_date = datetime.now().strftime("%Y-%m-%d")
-            st.write(f"Today's date: {today_date}")
+            # TOU Tariff Suggestion
+            tou_tariff = generate_tou_tariff()
+            high_tariff_hours = tou_tariff["High Tariff"]
+            st.write(f"High Tariff Hours: {', '.join(map(str, high_tariff_hours))}")
+            st.write("Use solar energy in high-tariff hours to save costs.")
 
-            # Plot predicted energy production
+            # Plot prediction trend
             plt.figure(figsize=(10, 5))
-            plt.plot(weather_df['date'], weather_df['predicted_energy'], marker='o', label='Predicted Solar Energy Production (kWh)')
+            plt.plot(weather_df['date'], weather_df['solar_energy_production'], marker='o', label='Production')
             plt.xticks(rotation=45)
             plt.xlabel("Date")
             plt.ylabel("Solar Energy Production (kWh)")
-            plt.title("Predicted Solar Energy Production Over Last 30 Days")
+            plt.title("Solar Energy Production Over Last 30 Days")
             plt.legend()
             st.pyplot(plt)
 
-            # Display TOU tariff information
-            tou_df = create_tou_tariff()
-            st.subheader("TOU Tariff Information (per kWh)")
-            st.table(tou_df)
-
-            # Predict solar energy for user inputs
-            new_sunlight_hours = st.number_input("Sunlight hours", value=10)
-            new_cloud_cover = st.number_input("Cloud cover (%)", value=20)
-            new_temperature = st.number_input("Temperature (°C)", value=25)
-
-            if st.button("Predict"):
-                predicted_energy = predict_solar_energy(model, new_sunlight_hours, new_cloud_cover, new_temperature)
-                st.write(f'Predicted Solar Energy Production: {predicted_energy:.2f} kWh')
-
-                # Provide appliance suggestions
-                suggestions = suggest_appliances(predicted_energy)
-                if suggestions:
-                    st.write("You can power the following appliances with the predicted solar energy:")
-                    for appliance in suggestions:
-                        st.write(f"- {appliance}")
-                else:
-                    st.write("Not enough energy to power any appliances.")
-
-                # Optimal usage suggestion
-                high_tariff_periods = tou_df[tou_df['Tariff Rate'] == tou_df['Tariff Rate'].max()]["Period"].values
-                st.write(f"Suggested periods to use solar energy due to high tariffs: {', '.join(high_tariff_periods)}.")
+            # Suggest appliances
+            suggestions = suggest_appliances(predicted_energy)
+            if suggestions:
+                st.write("You can power the following appliances with today's solar energy:")
+                st.write(", ".join(suggestions))
+            else:
+                st.write("Not enough solar energy for suggested appliances.")
         else:
-            st.warning("No data available for the specified location and date range.")
-
-# Run the app
+            st.warning("Data not available for the specified location.")
+            
 if __name__ == "__main__":
     main()
