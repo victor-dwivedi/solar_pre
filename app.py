@@ -1,211 +1,121 @@
-# -*- coding: utf-8 -*-
-
-import requests
-import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
-from datetime import datetime, timedelta
-from sklearn.model_selection import train_test_split
-from sklearn.ensemble import RandomForestRegressor
 import streamlit as st
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from geopy.geocoders import Nominatim
 
-# Function to fetch weather data from the Weather API
-def fetch_weather_data(api_key, location, days=30):
-    url = f"http://api.weatherapi.com/v1/history.json?key={api_key}&q={location}&dt="
-    weather_data = []
-
-    for i in range(days):
-        date = (datetime.now() - timedelta(days=i)).strftime("%Y-%m-%d")
-        response = requests.get(url + date)
-
-        if response.status_code == 200:
-            data = response.json()
-            try:
-                # Calculate daylight hours based on sunrise and sunset times
-                sunrise = data['forecast']['forecastday'][0]['astro']['sunrise']
-                sunset = data['forecast']['forecastday'][0]['astro']['sunset']
-                
-                sunrise_dt = datetime.strptime(sunrise, '%I:%M %p')
-                sunset_dt = datetime.strptime(sunset, '%I:%M %p')
-                
-                # Calculate daylight duration in hours
-                daylight_duration = (sunset_dt - sunrise_dt).seconds / 3600
-                
-                daily_data = {
-                    "date": date,
-                    "sunlight_hours": daylight_duration,
-                    "temperature": data['forecast']['forecastday'][0]['day'].get('avgtemp_c', 0),
-                    "solar_energy_production": None
-                }
-                weather_data.append(daily_data)
-            except KeyError as e:
-                st.error(f"Key error: {e} on date: {date}")
-                st.write("Response data:", data)
-        else:
-            st.error(f"Error fetching data for {date}: {response.status_code}")
-            st.write("Response:", response.text)  # Log the response for debugging
-
-    return pd.DataFrame(weather_data)
-
-# Function to create synthetic solar energy production data
-def create_solar_energy_production(df):
-    sunlight_factor = 1.5
-    temperature_factor = 0.1
-
-    df['solar_energy_production'] = (
-        df['sunlight_hours'] * sunlight_factor +
-        df['temperature'] * temperature_factor
-    ).clip(lower=0)
-
-    return df
-
-# Function to predict solar energy production for a new day
-def predict_solar_energy(model, sunlight_hours, temperature):
-    input_data = pd.DataFrame([[sunlight_hours, temperature]], columns=['sunlight_hours', 'temperature'])
-    predicted_production = model.predict(input_data)
-    return predicted_production[0]
-
-# Suggestions for appliances based on solar energy production
-def suggest_appliances(predicted_energy):
-    appliances = {
-        "LED Bulbs": 10,      # watts
-        "Laptop": 50,         # watts
-        "Television": 100,    # watts
-        "Refrigerator": 150,  # watts
-        "Washing Machine": 500, # watts
-        "Air Conditioner": 2000, # watts
-        "Microwave": 1000,    # watts
-        "Electric Kettle": 1500, # watts
-        "Fan": 75,            # watts
-        "Toaster": 800        # watts
-    }
+# Function to calculate solar energy
+def calculate_solar_energy(latitude, dT):
+    # Calculate theta
+    theta = 23.5 * np.sin((dT / 365.25) * 2 * np.pi)
     
-    suggestions = []
-    usage_hours = {}
-
-    for appliance, wattage in appliances.items():
-        if predicted_energy >= wattage:
-            hours = predicted_energy / wattage  # Calculate how many hours it can run
-            suggestions.append(appliance)
-            usage_hours[appliance] = hours  # Store usage hours
+    # Calculate σD
+    sigma_D = 137 * np.cos(np.radians(latitude - theta))
     
-    return suggestions, usage_hours
+    # Calculate energy over 12 hours in mJ
+    E = sigma_D * (4.3e4 / np.pi)  # in mJ
+    return E
 
-# Main function
-def main():
-    st.markdown(
-    """
-    <style>
-    .reportview-container {
-        background-image: url('https://t3.ftcdn.net/jpg/06/58/93/12/360_F_658931267_W9QK8mbF8NvK8MrXrkek4MYE8Lr1RixM.jpg');
-        background-size: cover;
-        background-repeat: no-repeat;
-        background-attachment: fixed;
-        background-position: center;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True
-)
+# Initialize geocoder
+geolocator = Nominatim(user_agent="geoapiExercises")
 
-    st.title("Solar Energy Production Predictor")
-    
-    location = st.text_input("Enter your location", "Nagpur")
-    api_key = st.text_input("Enter your API Key", "6905b6c823214623958124021242510")
+# Streamlit UI
+st.title("Solar Energy Calculation")
 
-    if location and api_key:
-        weather_df = fetch_weather_data(api_key, location)
+# User input for location
+location_input = st.text_input("Enter your Location (City Name)", value="Nagpur")
 
-        if weather_df is not None and not weather_df.empty:
-            weather_df = create_solar_energy_production(weather_df)
+# Get latitude and longitude from the location
+if location_input:
+    location = geolocator.geocode(location_input)
+    if location:
+        latitude = location.latitude
+        st.write(f"Latitude for {location_input}: {latitude:.2f}")
 
-            # Prepare data for training
-            X = weather_df[['sunlight_hours', 'temperature']]
-            y = weather_df['solar_energy_production']
+        # User input for days since March 21
+        dT = st.number_input("Days since March 21 (dT)", value=100)  # Change as needed
 
-            # Split the data
-            X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+        # Calculate solar energy
+        if st.button("Calculate Energy"):
+            solar_energy = calculate_solar_energy(latitude, dT)
+            st.write(f"Solar Energy over 12 hours: {solar_energy:.2f} mJ")
 
-            # Train a Random Forest Regressor
-            model = RandomForestRegressor(n_estimators=100, random_state=42)
-            model.fit(X_train, y_train)
+            # Suggest appliances based on solar energy
+            if solar_energy > 1e6:  # Example threshold
+                st.success("You have sufficient solar energy to power multiple appliances.")
+                st.write("Suggested appliances: LED bulbs, energy-efficient fans, solar water heaters, etc.")
+            else:
+                st.warning("Consider using fewer appliances or reducing consumption.")
 
-            # Make predictions for the entire dataset
-            weather_df['predicted_energy'] = model.predict(X)
+        # Plotting Solar Energy over a Year
+        days_in_year = np.arange(0, 365)
+        solar_energies = [calculate_solar_energy(latitude, d) for d in days_in_year]
 
-            # Display today's date
-            today_date = datetime.now().strftime("%Y-%m-%d")
-            st.write(f"Today's date: {today_date}")
+        plt.figure(figsize=(10, 5))
+        plt.plot(days_in_year, solar_energies, label='Solar Energy (mJ)', color='orange')
+        plt.title('Solar Energy Collection Over a Year')
+        plt.xlabel('Days Since March 21')
+        plt.ylabel('Energy (mJ)')
+        plt.axhline(y=np.mean(solar_energies), color='r', linestyle='--', label='Average Energy')
+        plt.legend()
+        plt.grid()
+        st.pyplot(plt)
 
-            # Plotting predicted energy production
-            st.subheader("Predicted Solar Energy Production Over Time")
-            plt.figure(figsize=(10, 5))
-            plt.plot(weather_df['date'], weather_df['predicted_energy'], marker='o', label='Predicted Solar Energy Production (kWh)')
-            plt.xticks(rotation=45)
-            plt.xlabel("Date")
-            plt.ylabel("Solar Energy Production (kWh)")
-            plt.title("Predicted Solar Energy Production Over Last 30 Days")
-            plt.legend()
-            st.pyplot(plt)
+        # Additional dynamic plots
+        # Seasonal Variation
+        seasons = ['Winter', 'Spring', 'Summer', 'Fall']
+        seasonal_energies = [np.mean(solar_energies[i:i + 90]) for i in [0, 90, 180, 270]]
 
-            # Plotting sunlight hours
-            st.subheader("Daily Sunlight Hours")
-            plt.figure(figsize=(10, 5))
-            plt.bar(weather_df['date'], weather_df['sunlight_hours'], color='orange')
-            plt.xticks(rotation=45)
-            plt.xlabel("Date")
-            plt.ylabel("Sunlight Hours")
-            plt.title("Daily Sunlight Hours Over Last 30 Days")
-            st.pyplot(plt)
+        plt.figure(figsize=(10, 5))
+        plt.bar(seasons, seasonal_energies, color='skyblue')
+        plt.title('Average Solar Energy by Season')
+        plt.xlabel('Season')
+        plt.ylabel('Average Energy (mJ)')
+        plt.grid()
+        st.pyplot(plt)
 
-            # Plotting daily average temperature
-            st.subheader("Daily Average Temperature")
-            plt.figure(figsize=(10, 5))
-            plt.plot(weather_df['date'], weather_df['temperature'], marker='s', color='blue', label='Average Temperature (°C)')
-            plt.xticks(rotation=45)
-            plt.xlabel("Date")
-            plt.ylabel("Temperature (°C)")
-            plt.title("Daily Average Temperature Over Last 30 Days")
-            plt.legend()
-            st.pyplot(plt)
+        # Daily Solar Energy in a specific month (e.g., June)
+        june_days = np.arange(0, 30)
+        june_solar_energies = [calculate_solar_energy(latitude, d + 90) for d in june_days]  # June is about day 90 to 120
 
-            # Plotting predicted vs actual solar energy production
-            st.subheader("Predicted vs Actual Solar Energy Production")
-            plt.figure(figsize=(10, 5))
-            plt.plot(weather_df['date'], weather_df['predicted_energy'], marker='o', color='green', label='Predicted Energy')
-            plt.axhline(y=0, color='r', linestyle='--', label='Actual Energy (if available)')
-            plt.xticks(rotation=45)
-            plt.xlabel("Date")
-            plt.ylabel("Energy (kWh)")
-            plt.title("Predicted vs Actual Solar Energy Production")
-            plt.legend()
-            st.pyplot(plt)
+        plt.figure(figsize=(10, 5))
+        plt.bar(june_days, june_solar_energies, color='lightgreen')
+        plt.title('Daily Solar Energy in June')
+        plt.xlabel('Day of June')
+        plt.ylabel('Energy (mJ)')
+        plt.grid()
+        st.pyplot(plt)
 
-            # Appliance usage capacity plot
-            st.subheader("Appliance Usage Capacity Based on Predicted Solar Energy")
-            if st.button("Calculate Appliance Usage"):
-                predicted_energy = weather_df['predicted_energy'].iloc[-1]  # Get the latest predicted energy
-                suggestions, usage_hours = suggest_appliances(predicted_energy)
+        # Comparative Analysis: Energy Collection in Different Latitudes
+        latitudes = [0, 30, 45, 60]
+        comparative_energies = [calculate_solar_energy(lat, dT) for lat in latitudes]
 
-                usage_df = pd.DataFrame(usage_hours.items(), columns=['Appliance', 'Usage Hours'])
+        plt.figure(figsize=(10, 5))
+        plt.bar(latitudes, comparative_energies, color='salmon')
+        plt.title('Solar Energy at Different Latitudes')
+        plt.xlabel('Latitude (degrees)')
+        plt.ylabel('Energy (mJ)')
+        plt.grid()
+        st.pyplot(plt)
 
-                plt.figure(figsize=(10, 5))
-                plt.bar(usage_df['Appliance'], usage_df['Usage Hours'], color='purple')
-                plt.xlabel("Appliance")
-                plt.ylabel("Hours of Usage")
-                plt.title("Appliance Usage Capacity Based on Predicted Solar Energy")
-                plt.xticks(rotation=45)
-                st.pyplot(plt)
+        # Energy Consumption vs. Production
+        appliance_names = ['LED Bulb', 'Refrigerator', 'Washing Machine', 'Air Conditioner']
+        appliance_consumption = [10, 150, 500, 1500]  # in Wh
+        energy_production = [solar_energy * 1e-3 / 3600] * len(appliance_names)  # Convert mJ to Wh
 
-                if suggestions:
-                    st.write("You can power the following appliances with the predicted solar energy:")
-                    for appliance in suggestions:
-                        st.write(f"- {appliance}: Can run for {usage_hours[appliance]:.2f} hours")
-                else:
-                    st.write("Not enough energy to power any appliances.")
-        else:
-            st.warning("No data available for the specified location and date range.")
+        plt.figure(figsize=(10, 5))
+        bar_width = 0.35
+        index = np.arange(len(appliance_names))
 
-# Run the app
-if __name__ == "__main__":
-    main()
+        plt.bar(index, appliance_consumption, bar_width, label='Consumption (Wh)', color='orange')
+        plt.bar(index + bar_width, energy_production, bar_width, label='Solar Energy Production (Wh)', color='lightblue')
+        plt.xlabel('Appliances')
+        plt.ylabel('Energy (Wh)')
+        plt.title('Energy Consumption vs. Solar Energy Production')
+        plt.xticks(index + bar_width / 2, appliance_names)
+        plt.legend()
+        plt.grid()
+        st.pyplot(plt)
+
+    else:
+        st.error("Location not found. Please try another city name.")
