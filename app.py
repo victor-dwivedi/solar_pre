@@ -138,8 +138,7 @@ def main():
             mse = mean_squared_error(y_test, y_pred)
             r2 = r2_score(y_test, y_pred)
 
-            st.write(f'Mean Squared Error: {mse:.2f}')
-            st.write(f'R^2 Score: {r2:.2f}')
+           
 
 if __name__ == "__main__":
     main()
