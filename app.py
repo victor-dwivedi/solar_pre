@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-
 import requests
 import pandas as pd
 import numpy as np
@@ -54,6 +53,13 @@ def create_solar_energy_production(df):
 
     return df
 
+# Generate synthetic TOU tariff rates
+def create_tou_tariff():
+    tou_periods = ["Morning (6am-9am)", "Daytime (9am-4pm)", "Evening (4pm-9pm)", "Night (9pm-6am)"]
+    tou_rates = [0.15, 0.25, 0.30, 0.10]  # Sample rates per kWh
+    tou_df = pd.DataFrame({"Period": tou_periods, "Tariff Rate": tou_rates})
+    return tou_df
+
 # Function to predict solar energy production for a new day
 def predict_solar_energy(model, sunlight_hours, cloud_cover, temperature):
     input_data = pd.DataFrame([[sunlight_hours, cloud_cover, temperature]], columns=['sunlight_hours', 'cloud_cover', 'temperature'])
@@ -80,24 +86,28 @@ def suggest_appliances(predicted_energy):
 
 # Main function
 def main():
-    # Set up background image
+    # Set up background image and custom CSS
     st.markdown(
-    """
-    <style>
-    .reportview-container {
-        background-image: url('https://t3.ftcdn.net/jpg/06/58/93/12/360_F_658931267_W9QK8mbF8NvK8MrXrkek4MYE8Lr1RixM.jpg');
-        background-size: cover;
-        background-repeat: no-repeat;
-        background-attachment: fixed;
-        background-position: center;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True
-)
+        """
+        <style>
+        .reportview-container {
+            background-image: url('https://t3.ftcdn.net/jpg/06/58/93/12/360_F_658931267_W9QK8mbF8NvK8MrXrkek4MYE8Lr1RixM.jpg');
+            background-size: cover;
+            background-repeat: no-repeat;
+            background-attachment: fixed;
+            background-position: center;
+        }
+        .main {
+            background: rgba(255, 255, 255, 0.8);
+            padding: 2rem;
+            border-radius: 10px;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
 
-
-    st.title("Solar Energy Production Predictor")
+    st.title("🌞 Solar Energy Production & TOU Tariff Optimizer")
     
     location = st.text_input("Enter your location", "Nagpur")
 
@@ -124,7 +134,7 @@ def main():
             today_date = datetime.now().strftime("%Y-%m-%d")
             st.write(f"Today's date: {today_date}")
 
-            # Plotting predicted energy production
+            # Plot predicted energy production
             plt.figure(figsize=(10, 5))
             plt.plot(weather_df['date'], weather_df['predicted_energy'], marker='o', label='Predicted Solar Energy Production (kWh)')
             plt.xticks(rotation=45)
@@ -134,7 +144,12 @@ def main():
             plt.legend()
             st.pyplot(plt)
 
-            # Example prediction inputs
+            # Display TOU tariff information
+            tou_df = create_tou_tariff()
+            st.subheader("TOU Tariff Information (per kWh)")
+            st.table(tou_df)
+
+            # Predict solar energy for user inputs
             new_sunlight_hours = st.number_input("Sunlight hours", value=10)
             new_cloud_cover = st.number_input("Cloud cover (%)", value=20)
             new_temperature = st.number_input("Temperature (°C)", value=25)
@@ -143,7 +158,7 @@ def main():
                 predicted_energy = predict_solar_energy(model, new_sunlight_hours, new_cloud_cover, new_temperature)
                 st.write(f'Predicted Solar Energy Production: {predicted_energy:.2f} kWh')
 
-                # Provide suggestions for appliances
+                # Provide appliance suggestions
                 suggestions = suggest_appliances(predicted_energy)
                 if suggestions:
                     st.write("You can power the following appliances with the predicted solar energy:")
@@ -151,6 +166,10 @@ def main():
                         st.write(f"- {appliance}")
                 else:
                     st.write("Not enough energy to power any appliances.")
+
+                # Optimal usage suggestion
+                high_tariff_periods = tou_df[tou_df['Tariff Rate'] == tou_df['Tariff Rate'].max()]["Period"].values
+                st.write(f"Suggested periods to use solar energy due to high tariffs: {', '.join(high_tariff_periods)}.")
         else:
             st.warning("No data available for the specified location and date range.")
 
