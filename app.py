@@ -110,7 +110,7 @@ def main():
     st.title("Solar Energy Prediction App", anchor=None)
     st.markdown('<h1 class="main-title">Solar Energy Prediction App</h1>', unsafe_allow_html=True)
 
-    API_KEY = "YOUR_API_KEY"  # Replace with your actual Weather API key
+    API_KEY = "15126be931c44b49917131244242510"  # Replace with your actual Weather API key
     
     LOCATION = st.text_input("Enter Location:", value="Nagpur")
     
