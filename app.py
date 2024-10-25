@@ -42,8 +42,8 @@ def fetch_weather_data(api_key, location, days=30):
             data = response.json()
             daily_data = {
                 "date": date,
-                "sunlight_hours": data['forecast']['forecastday'][0]['day'].get('sunshine', 9),  # Set default value between 8-11
-                "cloud_cover": data['forecast']['forecastday'][0]['day'].get('cloud', 50),  # Set default value between 30-80
+                "sunlight_hours": np.clip(np.random.normal(9, 1), 8, 11),  # Vary sunlight hours between 8 and 11
+                "cloud_cover": np.clip(np.random.normal(50, 10), 30, 80),   # Vary cloud cover between 30 and 80
                 "temperature": data['forecast']['forecastday'][0]['day'].get('avgtemp_c', 0),
                 "solar_energy_production": None  # Placeholder for actual production data
             }
@@ -58,13 +58,13 @@ def create_solar_energy_production(df):
     # Adjusted coefficients for factors influencing solar energy production
     sunlight_factor = 2.0        # Increased weight for sunlight hours
     temperature_factor = 0.05    # Reduced influence of temperature
-    cloud_cover_penalty = -0.3   # Reduced penalty for cloud cover
+    cloud_cover_penalty = -0.25  # Reduced penalty for cloud cover
 
     df['solar_energy_production'] = (
         df['sunlight_hours'] * sunlight_factor +
         df['temperature'] * temperature_factor +
         df['cloud_cover'] * cloud_cover_penalty
-    ).clip(lower=0)  # Clip to prevent negative values
+    ).clip(lower=10)  # Ensure a minimum value of 10
 
     return df
 
@@ -110,7 +110,7 @@ def main():
     st.title("Solar Energy Prediction App", anchor=None)
     st.markdown('<h1 class="main-title">Solar Energy Prediction App</h1>', unsafe_allow_html=True)
 
-    API_KEY = "15126be931c44b49917131244242510"  # Replace with your actual Weather API key
+    API_KEY = "YOUR_API_KEY"  # Replace with your actual Weather API key
     
     LOCATION = st.text_input("Enter Location:", value="Nagpur")
     
