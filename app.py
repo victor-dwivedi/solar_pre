@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestRegressor
 import streamlit as st
+import streamlit.components.v1 as components
 
 # API key
 API_KEY = "d224a9f66ffa425eab3180904242310"
@@ -46,7 +47,7 @@ def create_solar_energy_production(df):
     ).clip(lower=0)
     return df
 
-# Time-of-Use (TOU) Tariff Data
+# TOU Tariff Data
 def generate_tou_tariff():
     tou_hours = {
         "High Tariff": [8, 9, 10, 11, 12, 17, 18, 19],
@@ -63,6 +64,10 @@ def suggest_appliances(predicted_energy):
         "Fan": 75,
         "Television": 150,
         "Refrigerator": 200,
+        "Phone Charger": 5,
+        "Wi-Fi Router": 6,
+        "Microwave Oven": 800,
+        "Electric Kettle": 1200,
         "Washing Machine": 500,
         "Air Conditioner": 2000
     }
@@ -71,26 +76,23 @@ def suggest_appliances(predicted_energy):
 
 # Main function
 def main():
-    # Background image and CSS styling
-    st.markdown("""
-    <style>
-    .reportview-container {
-        background: url('https://images.unsplash.com/photo-1508514177221-188b1cf16e9d?fm=jpg&q=60&w=3000&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxzZWFyY2h8NHx8c29sYXIlMjBlbmVyZ3l8ZW58MHx8MHx8fDA%3D');
-        background-size: cover;
-    }
-    .main {
-        background-color: rgba(255, 255, 255, 0.8);
-        padding: 20px;
-        border-radius: 10px;
-    }
-    </style>
-    """, unsafe_allow_html=True)
+    # Inject Bootstrap
+    components.html(
+        """
+        <link
+            rel="stylesheet"
+            href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css"
+            integrity="sha384-DZoCP7I/1IZTAJ1G2xNw2FME8M6GPFEe4oAG5F6xtqFf5jVfi1AN7HnWw5nTpuQbP"
+            crossorigin="anonymous">
+        """,
+        height=0,
+    )
 
     st.title("Solar Energy Production Predictor")
     st.write("Enter your location to fetch historical weather data:")
 
     location = st.text_input("Location", "")
-    
+
     if location:
         weather_df = fetch_weather_data(API_KEY, location)
         if not weather_df.empty:
@@ -108,33 +110,69 @@ def main():
             today_cloud_cover = weather_df.iloc[0]['cloud_cover']
             today_temp = weather_df.iloc[0]['temperature']
             predicted_energy = model.predict([[today_sunlight, today_cloud_cover, today_temp]])[0]
-            st.write(f"Predicted Solar Energy Production Today: {predicted_energy:.2f} kWh")
 
-            # TOU Tariff Suggestion
+            # Weather Condition Card
+            st.markdown("""
+            <div class="card mb-4">
+                <div class="card-header bg-primary text-white">Today's Weather Condition</div>
+                <div class="card-body">
+                    <p><strong>Sunlight Hours:</strong> {0}</p>
+                    <p><strong>Cloud Cover:</strong> {1}%</p>
+                    <p><strong>Temperature:</strong> {2}°C</p>
+                    <p><strong>Predicted Solar Energy Production:</strong> {3:.2f} kWh</p>
+                </div>
+            </div>
+            """.format(today_sunlight, today_cloud_cover, today_temp, predicted_energy), unsafe_allow_html=True)
+
+            # TOU Tariff Plot
             tou_tariff = generate_tou_tariff()
             high_tariff_hours = tou_tariff["High Tariff"]
-            st.write(f"High Tariff Hours: {', '.join(map(str, high_tariff_hours))}")
-            st.write("Use solar energy in high-tariff hours to save costs.")
-
-            # Plot prediction trend
+            hours = list(range(24))
+            tariffs = [
+                3 if hour in tou_tariff["High Tariff"] else 
+                2 if hour in tou_tariff["Medium Tariff"] else 1
+                for hour in hours
+            ]
             plt.figure(figsize=(10, 5))
-            plt.plot(weather_df['date'], weather_df['solar_energy_production'], marker='o', label='Production')
-            plt.xticks(rotation=45)
-            plt.xlabel("Date")
-            plt.ylabel("Solar Energy Production (kWh)")
-            plt.title("Solar Energy Production Over Last 30 Days")
-            plt.legend()
+            plt.bar(hours, tariffs, color=['green' if t == 1 else 'orange' if t == 2 else 'red' for t in tariffs])
+            plt.xlabel("Hour of the Day")
+            plt.ylabel("Tariff Level (1 = Low, 2 = Medium, 3 = High)")
+            plt.title("Time-of-Use (TOU) Tariff Plot")
             st.pyplot(plt)
 
-            # Suggest appliances
+            # Appliance Suggestions
             suggestions = suggest_appliances(predicted_energy)
             if suggestions:
-                st.write("You can power the following appliances with today's solar energy:")
-                st.write(", ".join(suggestions))
+                st.markdown("""
+                <div class="card mb-4">
+                    <div class="card-header bg-success text-white">Appliance Suggestions</div>
+                    <div class="card-body">
+                        <p>You can power the following appliances with today's solar energy:</p>
+                        <ul>{}</ul>
+                    </div>
+                </div>
+                """.format("".join(f"<li>{appliance}</li>" for appliance in suggestions)), unsafe_allow_html=True)
             else:
-                st.write("Not enough solar energy for suggested appliances.")
-        else:
-            st.warning("Data not available for the specified location.")
-            
+                st.markdown("""
+                <div class="card mb-4">
+                    <div class="card-header bg-warning text-white">Appliance Suggestions</div>
+                    <div class="card-body">
+                        <p>Not enough solar energy for suggested appliances.</p>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+
+            # Suggestions for Saving on Electricity Bills
+            st.markdown("""
+            <div class="card mb-4">
+                <div class="card-header bg-info text-white">Suggestions for Saving on Electricity Bills</div>
+                <div class="card-body">
+                    <p>1. <strong>Use appliances during low-tariff hours</strong> (shown in green on the TOU chart) whenever possible.</p>
+                    <p>2. <strong>Schedule high-power appliances like washing machines and air conditioners</strong> during peak solar production hours to save on grid energy costs.</p>
+                    <p>3. <strong>Use LED bulbs and energy-efficient appliances</strong> to maximize the benefits of solar energy production.</p>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
 if __name__ == "__main__":
     main()
