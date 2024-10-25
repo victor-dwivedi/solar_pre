@@ -88,7 +88,7 @@ def predict_solar_energy(model, sunlight_hours, cloud_cover, temperature):
 def main():
     st.title("Solar Energy Prediction App")
 
-    API_KEY = "d224a9f66ffa425eab3180904242310"  # Replace with your actual Weather API key
+    API_KEY = "6905b6c823214623958124021242510"  # Replace with your actual Weather API key
     LOCATION = st.text_input("Enter Location:", value="Nagpur")
     
     if st.button("Fetch Weather Data"):
