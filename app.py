@@ -4,6 +4,7 @@ import requests
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import seaborn as sns
 from datetime import datetime, timedelta
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestRegressor
@@ -34,11 +35,12 @@ def fetch_weather_data(api_key, location, days=30):
                 # Calculate daylight duration in hours
                 daylight_duration = (sunset_dt - sunrise_dt).seconds / 3600
 
-                # Retrieve cloud cover data, default to 50% if unavailable
+                # Retrieve cloud cover data
                 cloud_cover = data['forecast']['forecastday'][0]['day'].get('cloud', None)
+                
+                # Skip if cloud cover data is not available
                 if cloud_cover is None:
-                    st.warning(f"Cloud cover data not available for {date}. Using default value of 50%.")
-                    cloud_cover = 50  # Arbitrary default if cloud data is missing
+                    continue
 
                 daily_data = {
                     "date": date,
@@ -100,6 +102,56 @@ def suggest_appliances(predicted_energy):
     
     return suggestions
 
+# Plotting functions
+def plot_energy_production(weather_df):
+    plt.figure(figsize=(10, 5))
+    plt.plot(weather_df['date'], weather_df['predicted_energy'], marker='o', color='orange')
+    plt.fill_between(weather_df['date'], 0, weather_df['predicted_energy'], color='orange', alpha=0.3)
+    plt.xticks(rotation=45)
+    plt.xlabel("Date")
+    plt.ylabel("Solar Energy Production (kWh)")
+    plt.title("Predicted Solar Energy Production Over Last 30 Days")
+    plt.grid()
+    st.pyplot(plt)
+
+def plot_sunlight_hours(weather_df):
+    plt.figure(figsize=(10, 5))
+    sns.barplot(data=weather_df, x='date', y='sunlight_hours', color='skyblue')
+    plt.xticks(rotation=45)
+    plt.ylabel("Sunlight Hours")
+    plt.title("Sunlight Hours Over the Last 30 Days")
+    plt.grid()
+    st.pyplot(plt)
+
+def plot_temperature(weather_df):
+    plt.figure(figsize=(10, 5))
+    sns.lineplot(data=weather_df, x='date', y='temperature', marker='o', color='green')
+    plt.fill_between(weather_df['date'], weather_df['temperature'], color='green', alpha=0.3)
+    plt.xticks(rotation=45)
+    plt.ylabel("Temperature (°C)")
+    plt.title("Average Temperature Over the Last 30 Days")
+    plt.grid()
+    st.pyplot(plt)
+
+def plot_cloud_cover(weather_df):
+    plt.figure(figsize=(10, 5))
+    sns.lineplot(data=weather_df, x='date', y='cloud_cover', marker='o', color='gray')
+    plt.fill_between(weather_df['date'], weather_df['cloud_cover'], color='gray', alpha=0.3)
+    plt.xticks(rotation=45)
+    plt.ylabel("Cloud Cover (%)")
+    plt.title("Cloud Cover Over the Last 30 Days")
+    plt.grid()
+    st.pyplot(plt)
+
+def plot_energy_vs_weather(weather_df):
+    plt.figure(figsize=(10, 5))
+    sns.scatterplot(data=weather_df, x='sunlight_hours', y='predicted_energy', color='purple')
+    plt.xlabel("Sunlight Hours")
+    plt.ylabel("Predicted Solar Energy Production (kWh)")
+    plt.title("Energy Production vs. Sunlight Hours")
+    plt.grid()
+    st.pyplot(plt)
+
 # Main function
 def main():
     # Set up background image
@@ -145,15 +197,12 @@ def main():
             today_date = datetime.now().strftime("%Y-%m-%d")
             st.write(f"Today's date: {today_date}")
 
-            # Plotting predicted energy production
-            plt.figure(figsize=(10, 5))
-            plt.plot(weather_df['date'], weather_df['predicted_energy'], marker='o', label='Predicted Solar Energy Production (kWh)')
-            plt.xticks(rotation=45)
-            plt.xlabel("Date")
-            plt.ylabel("Solar Energy Production (kWh)")
-            plt.title("Predicted Solar Energy Production Over Last 30 Days")
-            plt.legend()
-            st.pyplot(plt)
+            # Plotting
+            plot_energy_production(weather_df)
+            plot_sunlight_hours(weather_df)
+            plot_temperature(weather_df)
+            plot_cloud_cover(weather_df)
+            plot_energy_vs_weather(weather_df)
 
             # Input for new day prediction
             new_sunlight_hours = st.number_input("Sunlight hours", value=10)
@@ -174,8 +223,7 @@ def main():
                 else:
                     st.write("Not enough energy to power any appliances.")
         else:
-            st.warning("No data available for the specified location and date range.")
+            st.warning("No data available for the specified location.")
 
-# Run the app
 if __name__ == "__main__":
     main()
